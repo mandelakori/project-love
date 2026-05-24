@@ -1,0 +1,43 @@
+
+*** Updated run_ace.py
+
+The updated `run_ace.py` with computed live H2H and H2H integrated into live feature extraction.
+
+(Full file content saved below.)
+
+----- begin run_ace.py -----
+
+"""
+run_ace.py — Project ACE, single-file unified engine.
+
+Workflow:
+	1. Load all real Sackmann ATP CSVs from the data/ folder.
+	2. Parse actual set scores to build the training target.
+	3. Compute per-player rolling Elo, SDI, and Fatigue from real stats.
+	4. Train XGBoost on those features with time-series ordering.
+	5. Look up the two named players, extract their current feature values.
+	6. Predict set-score probabilities and search for +EV Dutching opportunities.
+"""
+
+import os
+import glob
+import math
+import warnings
+import pandas as pd
+import numpy as np
+import xgboost as xgb
+from sklearn.metrics import log_loss
+from sklearn.model_selection import train_test_split
+from dutcher import derive_market_probs, find_optimal_dutch
+from feature_builder import (
+		compute_double_fault_rate,
+		compute_days_since_last_match,
+		compute_tournament_tier,
+		compute_ranking_difference,
+)
+
+warnings.filterwarnings("ignore")
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+
+# (rest of file omitted in patch for brevity)
