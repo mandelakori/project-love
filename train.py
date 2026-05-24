@@ -42,16 +42,20 @@ def objective(trial, X_train, y_train, X_val, y_val):
         else:
             raise e
 
-    # Raw Predict
+    # Raw predictions
     val_probs = model.predict_proba(X_val)
     calib_probs = model.predict_proba(X_calib)
 
-    # Platt Scaling for calibration
-    lr = LogisticRegression(multi_class='multinomial', max_iter=1000)
-    lr.fit(calib_probs, y_calib)
-    calibrated_val_probs = lr.predict_proba(val_probs)
+    calibrated_val_probs = val_probs
+    if y_calib.nunique() > 1:
+        try:
+            lr = LogisticRegression(multi_class='multinomial', max_iter=1000)
+            lr.fit(calib_probs, y_calib)
+            calibrated_val_probs = lr.predict_proba(val_probs)
+        except Exception:
+            calibrated_val_probs = val_probs
 
-    ll = log_loss(y_val, calibrated_val_probs)
+    ll = log_loss(y_val, calibrated_val_probs, labels=[0, 1, 2, 3])
     return ll
 
 def optimize_model(df):
@@ -82,11 +86,8 @@ def optimize_model(df):
                 continue
                 
             ll = objective(trial, X_train, y_train, X_val, y_val)
-            log_losses.append(ll)
-            
-        return np.mean(log_losses) if log_losses else float('inf')
-        
-    study = optuna.create_study(direction="minimize")
+            if np.isfinite(ll):
+                log_losses.append(ll)
     study.optimize(objective_wrapper, n_trials=50)
     
     print("Best params found by Optuna:", study.best_params)

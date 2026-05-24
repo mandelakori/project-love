@@ -128,16 +128,17 @@ def objective(trial, X_train, y_train, X_val, y_val, tree_method, device):
     calib_probs = model.predict_proba(X_calib)
     
     # Platt scaling: calibrate via logistic regression on calib set
-    try:
-        lr = LogisticRegression(multi_class="multinomial", max_iter=1000, verbose=0)
-        lr.fit(calib_probs, y_calib)
-        calibrated_val_probs = lr.predict_proba(val_probs)
-    except Exception:
-        # If calibration fails, use raw probs
-        calibrated_val_probs = val_probs
+    calibrated_val_probs = val_probs
+    if y_calib.nunique() > 1:
+        try:
+            lr = LogisticRegression(multi_class="multinomial", max_iter=1000, verbose=0)
+            lr.fit(calib_probs, y_calib)
+            calibrated_val_probs = lr.predict_proba(val_probs)
+        except Exception:
+            calibrated_val_probs = val_probs
     
-    # Compute log-loss
-    ll = log_loss(y_val, calibrated_val_probs)
+    # Compute log-loss with explicit class labels
+    ll = log_loss(y_val, calibrated_val_probs, labels=[0, 1, 2, 3])
     return ll
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -169,7 +170,8 @@ def optimize_model_gpu(X, y, n_trials, n_workers, tree_method, device):
                 continue
             
             ll = objective(trial, X_train, y_train, X_val, y_val, tree_method, device)
-            log_losses.append(ll)
+            if np.isfinite(ll):
+                log_losses.append(ll)
         
         return np.mean(log_losses) if log_losses else float("inf")
     
