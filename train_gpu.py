@@ -129,16 +129,31 @@ def objective(trial, X_train, y_train, X_val, y_val, tree_method, device):
     
     # Platt scaling: calibrate via logistic regression on calib set
     calibrated_val_probs = val_probs
+    classes = model.classes_
     if len(np.unique(y_calib)) > 1:
         try:
             lr = LogisticRegression(multi_class="multinomial", max_iter=1000, verbose=0)
             lr.fit(calib_probs, y_calib)
             calibrated_val_probs = lr.predict_proba(val_probs)
+            classes = lr.classes_
         except Exception:
             calibrated_val_probs = val_probs
+            classes = model.classes_
+    
+    # Align probabilities to the full 4 classes [0, 1, 2, 3]
+    n_classes = 4
+    full_probs = np.zeros((calibrated_val_probs.shape[0], n_classes), dtype=float)
+    for col_idx, lbl in enumerate(classes):
+        lbl = int(lbl)
+        if 0 <= lbl < n_classes:
+            full_probs[:, lbl] = calibrated_val_probs[:, col_idx]
+            
+    eps = 1e-15
+    full_probs = np.clip(full_probs, eps, 1 - eps)
+    full_probs = full_probs / full_probs.sum(axis=1, keepdims=True)
     
     # Compute log-loss with explicit class labels
-    ll = log_loss(y_val, calibrated_val_probs, labels=[0, 1, 2, 3])
+    ll = log_loss(y_val, full_probs, labels=[0, 1, 2, 3])
     return ll
 
 # ──────────────────────────────────────────────────────────────────────────────
