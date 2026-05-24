@@ -47,7 +47,7 @@ def objective(trial, X_train, y_train, X_val, y_val):
     calib_probs = model.predict_proba(X_calib)
 
     calibrated_val_probs = val_probs
-    if y_calib.nunique() > 1:
+    if len(np.unique(y_calib)) > 1:
         try:
             lr = LogisticRegression(multi_class='multinomial', max_iter=1000)
             lr.fit(calib_probs, y_calib)
