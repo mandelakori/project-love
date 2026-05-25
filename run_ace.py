@@ -1,3 +1,4 @@
+
 """
 run_ace.py — Project ACE, single-file unified engine.
 
@@ -14,6 +15,7 @@ import os
 import glob
 import math
 import warnings
+import pickle
 import pandas as pd
 import numpy as np
 import xgboost as xgb
@@ -420,11 +422,10 @@ def compute_live_h2h(df, p1, p2, date_int=None):
 def load_training_data():
     df = load_atp_data()
     ranking_df = load_ranking_data()
-    df["tourney_date"] = pd.to_numeric(df["tourney_date"], errors="coerce")
-    df = df.sort_values("tourney_date").reset_index(drop=True)
+    ranking_df = load_ranking_data()
+    df = df.dropna(subset=["tourney_date"]).reset_index(drop=True)
     df = enrich_match_ranks(df, ranking_df)
-    df = df.dropna(subset=["tourney_date"]).copy()
-    df["year"] = (df["tourney_date"] // 10000).astype(int)
+    df["year"] = (df["tourney_date"] // 10000).astype("Int64")
     df["target"] = df.apply(lambda r: parse_target(r.get("score", ""), r.get("best_of", 3)), axis=1)
     df, _ = compute_elo_ratings(df)
     X, y = build_features(df[df["target"] >= 0])
@@ -443,18 +444,18 @@ def evaluate_time_series_cv(X, y):
     for i in range(1, len(years)):
         train_mask = X["year"] < years[i]
         val_mask = X["year"] == years[i]
-        if train_mask.sum() < 50 or val_mask.sum() == 0:
+        y_train = y[train_mask]
+        if train_mask.sum() < 50 or val_mask.sum() == 0 or len(np.unique(y_train)) < 4:
             continue
 
         X_train = X[train_mask].drop(columns=["year"])
-        y_train = y[train_mask]
         X_val = X[val_mask].drop(columns=["year"])
         y_val = y[val_mask]
 
         model = xgb.XGBClassifier(
             max_depth=4, learning_rate=0.05, n_estimators=300,
             subsample=0.8, colsample_bytree=0.8,
-            objective="multi:softprob",
+            objective="multi:softprob", num_class=4,
             verbosity=0, use_label_encoder=False
         )
         model.fit(X_train, y_train)
@@ -534,18 +535,24 @@ def main():
     print("      Project ACE - Unified Engine       ")
     print("=========================================")
 
-    p1 = input("Enter Player 1 (e.g., Andrey Rublev): ").strip()
-    p2 = input("Enter Player 2 (e.g., Hamad Medjedovic): ").strip()
-    surface = input("Enter Surface (Hard/Clay/Grass): ").strip()
+    def safe_input(prompt: str, default: str) -> str:
+        try:
+            return input(prompt).strip()
+        except EOFError:
+            return default
+
+    p1 = safe_input("Enter Player 1 (e.g., Andrey Rublev): ", "Rinky Hijitaka")
+    p2 = safe_input("Enter Player 2 (e.g., Hamad Medjedovic): ", "Tommy Paul")
+    surface = safe_input("Enter Surface (Hard/Clay/Grass): ", "Clay")
 
     print(f"\n[1/5] Loading Sackmann ATP data...")
     df = load_atp_data()
     ranking_df = load_ranking_data()
 
     df["tourney_date"] = pd.to_numeric(df["tourney_date"], errors="coerce")
-    df = df.sort_values("tourney_date").reset_index(drop=True)
+    df = df.dropna(subset=["tourney_date"]).reset_index(drop=True)
     df = enrich_match_ranks(df, ranking_df)
-    df["year"] = (df["tourney_date"] // 10000).astype(int)
+    df["year"] = (df["tourney_date"] // 10000).astype("Int64")
 
     df["target"] = df.apply(lambda r: parse_target(r.get("score", ""), r.get("best_of", 3)), axis=1)
     print(f"    {len(df)} matches loaded, {(df['target']>=0).sum()} with valid set scores.")
@@ -562,14 +569,33 @@ def main():
         print("    Not enough distinct years for cross-validation; training on all data.")
 
     features = X.drop(columns=["year"])
-    model = xgb.XGBClassifier(
-        max_depth=4, learning_rate=0.05, n_estimators=300,
-        subsample=0.8, colsample_bytree=0.8,
-        objective="multi:softprob", num_class=4,
-        verbosity=0, use_label_encoder=False
-    )
-    model.fit(features, y)
-    print(f"    Model trained on {len(features)} matches.")
+    
+    # Try to load pre-trained optimized model
+    model_path = os.path.join(os.path.dirname(__file__), "models", "best_optuna_model.pkl")
+    model = None
+    if os.path.exists(model_path):
+        print(f"    [Model] Loading pre-trained optimized model from {model_path}...")
+        try:
+            with open(model_path, "rb") as f:
+                model = pickle.load(f)
+            # Verify the model has been fitted and has the correct classes
+            _ = model.classes_
+        except Exception as e:
+            print(f"    [Model] Warning loading model: {e}. Training from scratch instead.")
+            model = None
+
+    if model is None:
+        print("    [Model] Training model from scratch using optimized parameters...")
+        model = xgb.XGBClassifier(
+            max_depth=3, learning_rate=0.13868375050784645, n_estimators=389,
+            subsample=0.9104334234952312, colsample_bytree=0.7570524019425512,
+            reg_lambda=6.571735726256493, reg_alpha=0.2260034233142063,
+            min_child_weight=1,
+            objective="multi:softprob", num_class=4,
+            verbosity=0, use_label_encoder=False
+        )
+        model.fit(features, y)
+        print(f"    Model trained on {len(features)} matches.")
 
     print(f"\n[4/5] Extracting live features for {p1} vs {p2}...")
     p1_features = get_player_live_features(df, p1, final_ratings)

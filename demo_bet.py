@@ -6,6 +6,7 @@ set-score probabilities for a match, and evaluates actual sportsbook odds for +E
 """
 
 import argparse
+import pickle
 
 import pandas as pd
 import xgboost as xgb
@@ -42,18 +43,36 @@ def prepare_training_data():
 
 
 def train_model(X, y):
-    model = xgb.XGBClassifier(
-        max_depth=4,
-        learning_rate=0.05,
-        n_estimators=300,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        objective="multi:softprob",
-        num_class=4,
-        verbosity=0,
-        use_label_encoder=False,
-    )
-    model.fit(X.drop(columns=["year"]), y)
+    import os
+    model_path = os.path.join(os.path.dirname(__file__), "models", "best_optuna_model.pkl")
+    model = None
+    if os.path.exists(model_path):
+        print(f"Loading pre-trained optimized model from {model_path}...")
+        try:
+            with open(model_path, "rb") as f:
+                model = pickle.load(f)
+            _ = model.classes_
+        except Exception as e:
+            print(f"Warning loading model: {e}. Training from scratch instead.")
+            model = None
+
+    if model is None:
+        print("Training the live XGBoost model on actual ATP history using optimized parameters...")
+        model = xgb.XGBClassifier(
+            max_depth=3,
+            learning_rate=0.13868375050784645,
+            n_estimators=389,
+            subsample=0.9104334234952312,
+            colsample_bytree=0.7570524019425512,
+            reg_lambda=6.571735726256493,
+            reg_alpha=0.2260034233142063,
+            min_child_weight=1,
+            objective="multi:softprob",
+            num_class=4,
+            verbosity=0,
+            use_label_encoder=False,
+        )
+        model.fit(X.drop(columns=["year"]), y)
     return model
 
 

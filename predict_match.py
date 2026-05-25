@@ -2,6 +2,7 @@ import argparse
 import pandas as pd
 import numpy as np
 import os
+import pickle
 
 from dutcher import derive_market_probs, find_optimal_dutch
 from run_ace import (
@@ -81,14 +82,30 @@ def main():
     df, X, y, final_ratings = load_and_prepare_data()
     print(f"Loaded {len(X)} feature rows for training.")
 
-    print("Training XGBoost model on real historical features...")
-    model = xgb.XGBClassifier(
-        max_depth=4, learning_rate=0.05, n_estimators=300,
-        subsample=0.8, colsample_bytree=0.8,
-        objective="multi:softprob", num_class=4,
-        verbosity=0, use_label_encoder=False
-    )
-    model.fit(X.drop(columns=["year"]), y)
+    # Try to load pre-trained optimized model
+    model_path = os.path.join(os.path.dirname(__file__), "models", "best_optuna_model.pkl")
+    model = None
+    if os.path.exists(model_path):
+        print(f"Loading pre-trained optimized model from {model_path}...")
+        try:
+            with open(model_path, "rb") as f:
+                model = pickle.load(f)
+            _ = model.classes_
+        except Exception as e:
+            print(f"Warning loading model: {e}. Training from scratch instead.")
+            model = None
+
+    if model is None:
+        print("Training XGBoost model on real historical features using optimized parameters...")
+        model = xgb.XGBClassifier(
+            max_depth=3, learning_rate=0.13868375050784645, n_estimators=389,
+            subsample=0.9104334234952312, colsample_bytree=0.7570524019425512,
+            reg_lambda=6.571735726256493, reg_alpha=0.2260034233142063,
+            min_child_weight=1,
+            objective="multi:softprob", num_class=4,
+            verbosity=0, use_label_encoder=False
+        )
+        model.fit(X.drop(columns=["year"]), y)
 
     live_features = extract_live_features(args.player1, args.player2, args.surface, df, final_ratings)
     raw_probs = model.predict_proba(live_features)[0]

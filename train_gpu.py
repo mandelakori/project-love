@@ -181,7 +181,7 @@ def optimize_model_gpu(X, y, n_trials, n_workers, tree_method, device):
             X_val = X[val_mask].drop(columns=["year"])
             y_val = y[val_mask]
             
-            if len(X_train) < 50 or len(X_val) == 0:
+            if len(X_train) < 50 or len(X_val) == 0 or len(np.unique(y_train)) < 4:
                 continue
             
             ll = objective(trial, X_train, y_train, X_val, y_val, tree_method, device)

@@ -96,8 +96,8 @@ def optimize_model(df):
             X_val = df[val_mask].drop(columns=['target', 'year'])
             y_val = df[val_mask]['target']
             
-            # Require at least some training samples
-            if len(X_train) < 50 or len(X_val) == 0:
+            # Require at least some training samples and all 4 classes present in training target
+            if len(X_train) < 50 or len(X_val) == 0 or len(np.unique(y_train)) < 4:
                 continue
                 
             ll = objective(trial, X_train, y_train, X_val, y_val)

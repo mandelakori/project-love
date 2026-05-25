@@ -27,6 +27,7 @@ def run_real_pipeline_check():
     df["tourney_date"] = df["tourney_date"].apply(pd.to_numeric, errors="coerce")
     df = df.sort_values("tourney_date").reset_index(drop=True)
     df = enrich_match_ranks(df, ranking_df)
+    df = df.dropna(subset=["tourney_date"]).copy()
     df["year"] = (df["tourney_date"] // 10000).astype(int)
     df["target"] = df.apply(lambda row: parse_target(row.get("score", ""), row.get("best_of", 3)), axis=1)
 
