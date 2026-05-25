@@ -1,7 +1,3 @@
-# """
-run_ace_gpu.py — Project ACE, GPU‑enabled unified engine.
-"""
-
 import os
 import glob
 import warnings
