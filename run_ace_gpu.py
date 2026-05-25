@@ -474,7 +474,7 @@ def main():
     df = enrich_match_ranks(df, ranking_df)
     df["year"] = (df["tourney_date"] // 10000).astype("Int64")
     df["target"] = df.apply(lambda r: parse_target(r.get("score", ""), r.get("best_of", 3)), axis=1)
-    print(f"    {len(df)} matches loaded, {(df['target']> =0).sum()} with valid set scores.")
+    print(f"    {len(df)} matches loaded, {(df['target'] >= 0).sum()} with valid set scores.")
     print("\n[2/5] Computing rolling Elo ratings...")
     df, final_ratings = compute_elo_ratings(df)
     print("\n[3/5] Building features and evaluating time-series CV...")
